@@ -1,0 +1,49 @@
+# Vasati — Full Platform Build
+
+## Phase 1: Infrastructure & Scaffolding
+- [ ] 1. Scaffold repository structure (all directories, empty __init__.py files)
+- [ ] 2. Write docker-compose.yml, Dockerfiles, nginx.conf, .env.example, Makefile
+- [ ] 3. Write requirements.txt and requirements.dev.txt
+- [ ] 4. Run `make up` — verify all services healthy
+
+## Phase 2: Django Core Setup
+- [ ] 5. Set up Django project with django-tenants (settings/base.py, urls.py, wsgi.py, celery.py)
+- [ ] 6. Configure SHARED_APPS and TENANT_APPS per specification
+- [ ] 7. Run migrate_schemas --shared, verify public schema in PostgreSQL
+
+## Phase 3: Tenant & Account Apps
+- [ ] 8. Build apps/tenants — Organization and Domain models
+- [ ] 9. Provision test org, verify schema created in PostgreSQL
+- [ ] 10. Build apps/accounts — User model, OTPCode, OrgMembership
+- [ ] 11. Wire up SimpleJWT + OTP auth flow (request-otp → verify-otp → JWT)
+- [ ] 12. Run schema isolation test
+
+## Phase 4: Property & Tenancy Apps
+- [ ] 13. Build apps/properties — Property and Unit models + CRUD endpoints
+- [ ] 14. Build apps/core — permissions (IsOrgMember, IsPropertyScoped)
+- [ ] 15. Build apps/tenancies — Tenant and Lease models + endpoints
+- [ ] 16. Build lease acknowledge flow
+
+## Phase 5: Payments & Compliance
+- [ ] 17. Build apps/payments — RentPayment, PaymentReminder models + endpoints
+- [ ] 18. Build cash logging endpoint
+- [ ] 19. Implement receipt PDF generation with reportlab
+- [ ] 20. Build apps/compliance — PoliceRegistration model + Phase 1 PDF generation
+- [ ] 21. Build compliance status tracking endpoints
+
+## Phase 6: Notices & Reports
+- [ ] 22. Build apps/notices — Notice model + send endpoint with SMS
+- [ ] 23. Build apps/reports — Dashboard + monthly summary endpoints
+
+## Phase 7: Celery Tasks
+- [ ] 24. Build Celery tasks: rent reminders, lease expiry, police reg renewal
+- [ ] 25. Verify beat schedule is registered
+
+## Phase 8: React Frontend
+- [ ] 26. Scaffold React + Vite + Tailwind with design tokens
+- [ ] 27. BS calendar utility
+- [ ] 28. Auth flow (OTP login)
+- [ ] 29. AppShell + sidebar
+- [ ] 30. Dashboard
+- [ ] 31. Properties + Tenants + Leases + Payments pages
+- [ ] 32. Tenant portal

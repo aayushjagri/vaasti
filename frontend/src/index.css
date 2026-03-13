@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Global Reset & Base ── */
+@layer base {
+  body {
+    @apply bg-bg text-white antialiased;
+    font-family: 'Syne', system-ui, sans-serif;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply bg-bg-elevated border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 transition-all duration-200;
+  }
+
+  label {
+    @apply block text-sm font-medium text-slate-300 mb-1.5;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-600;
+  }
+}
+
+/* ── Component Classes ── */
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-gold text-bg hover:bg-gold-light shadow-gold hover:shadow-gold-lg active:scale-[0.97];
+  }
+
+  .btn-secondary {
+    @apply btn bg-bg-elevated text-gold border border-gold/30 hover:bg-gold/10 hover:border-gold/50;
+  }
+
+  .btn-danger {
+    @apply btn bg-status-overdue/10 text-status-overdue border border-status-overdue/30 hover:bg-status-overdue/20;
+  }
+
+  .btn-ghost {
+    @apply btn text-slate-400 hover:text-white hover:bg-bg-hover;
+  }
+
+  .card {
+    @apply bg-bg-card border border-slate-800 rounded-2xl p-6 shadow-card transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:border-gold/20 hover:shadow-gold;
+  }
+
+  .stat-card {
+    @apply card flex flex-col gap-1;
+  }
+
+  .stat-value {
+    @apply text-2xl font-bold text-white font-mono;
+  }
+
+  .stat-label {
+    @apply text-sm text-slate-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-occupied {
+    @apply badge bg-status-occupied/15 text-status-occupied;
+  }
+
+  .badge-vacant {
+    @apply badge bg-status-vacant/15 text-status-vacant;
+  }
+
+  .badge-maintenance {
+    @apply badge bg-status-maintenance/15 text-status-maintenance;
+  }
+
+  .badge-reserved {
+    @apply badge bg-status-reserved/15 text-status-reserved;
+  }
+
+  .badge-active {
+    @apply badge bg-status-active/15 text-status-active;
+  }
+
+  .badge-draft {
+    @apply badge bg-status-draft/15 text-status-draft;
+  }
+
+  .badge-expired {
+    @apply badge bg-status-expired/15 text-status-expired;
+  }
+
+  .badge-expiring {
+    @apply badge bg-status-expiring/15 text-status-expiring;
+  }
+
+  .badge-paid {
+    @apply badge bg-status-paid/15 text-status-paid;
+  }
+
+  .badge-pending {
+    @apply badge bg-status-pending/15 text-status-pending;
+  }
+
+  .badge-overdue {
+    @apply badge bg-status-overdue/15 text-status-overdue;
+  }
+
+  .table-row {
+    @apply border-b border-slate-800 hover:bg-bg-hover transition-colors;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-gold hover:bg-gold/5 transition-all duration-200;
+  }
+
+  .sidebar-link-active {
+    @apply sidebar-link text-gold bg-gold/10 border-l-2 border-gold;
+  }
+
+  .page-title {
+    @apply text-2xl md:text-3xl font-bold text-white;
+  }
+
+  .section-title {
+    @apply text-lg font-semibold text-white mb-4;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4;
+  }
+
+  .modal-content {
+    @apply bg-bg-card border border-slate-700 rounded-2xl shadow-elevated w-full max-w-lg max-h-[90vh] overflow-y-auto;
+  }
+}

@@ -1,0 +1,95 @@
+# Vasati — Full Platform Implementation Plan
+
+Multi-tenant SaaS property and tenant management platform for the Nepal rental market. Django 5 + React 18 + PostgreSQL 16, with schema-per-tenant isolation via `django-tenants`.
+
+## User Review Required
+
+> [!IMPORTANT]
+> This is a very large project (14 build steps per the spec). I will build it incrementally, starting with Step 1 (repository scaffolding) and proceeding in order. Each step will be committed and verified before moving to the next.
+
+> [!WARNING]
+> Docker Desktop must be running on your machine for Steps 2-3 (Docker Compose setup). Please confirm Docker is available before I proceed past scaffolding.
+
+## Proposed Changes
+
+### Step 1: Repository Scaffolding
+
+#### [NEW] docker-compose.yml, docker-compose.prod.yml
+- Exact YAML as specified in the PRD
+
+#### [NEW] backend/Dockerfile
+- Python 3.12-slim base, PostgreSQL client, pip install
+
+#### [NEW] frontend/Dockerfile
+- Node 20, multi-stage (development/production)
+
+#### [NEW] .env.example
+- All environment variables from the PRD
+
+#### [NEW] Makefile
+- `up`, `down`, `build`, `shell`, `migrate`, `seed`, `logs`, `test`, `psql` targets
+
+#### [NEW] nginx/nginx.conf
+- Reverse proxy: /api → backend:8000, / → frontend:5173
+
+#### [NEW] backend/requirements.txt, backend/requirements.dev.txt
+- Exact dependency list from the PRD
+
+#### [NEW] Backend directory structure
+All `apps/` subdirectories with `__init__.py` files:
+- `backend/vasati/settings/` — base.py, development.py, production.py
+- `backend/vasati/` — urls.py, wsgi.py, celery.py
+- `backend/apps/` — tenants, accounts, properties, tenancies, payments, compliance, notices, reports, core
+
+#### [NEW] Frontend directory structure
+- `frontend/src/` — api, components, features, hooks, stores, utils, types
+- Feature directories: auth, dashboard, properties, tenants, leases, payments, compliance, notices, reports
+
+#### [NEW] scripts/
+- seed.py, create_tenant.py (stub)
+
+---
+
+### Step 2-3: Docker Services + Verification
+
+Bring up all services via `make up`:
+- PostgreSQL 16, Redis 7, MinIO, Backend (Django), Celery worker, Celery beat, Frontend (Vite), Nginx
+
+---
+
+### Steps 4-13: Backend Implementation
+
+Each step builds one Django app with models, serializers, views, URLs, and tests — exactly as specified in the PRD. Key patterns:
+- **django-tenants** for schema-per-tenant isolation
+- **SimpleJWT** for auth with OTP-based login
+- **IsOrgMember + IsPropertyScoped** permissions on all views
+- **DecimalField** for all money (NPR)
+- **Dual BS/AD date fields** on all date-bearing models
+- **reportlab** for receipt PDF generation
+- **Sparrow SMS** integration for notices
+
+---
+
+### Step 14: React Frontend
+
+Vite + React 18 + TypeScript + Tailwind CSS v3 with custom design tokens. Features:
+- BS calendar utility
+- OTP login flow
+- AppShell with responsive sidebar
+- Dashboard with rent collection ring
+- CRUD pages for properties, tenants, leases, payments
+- Tenant portal (read-only)
+
+## Verification Plan
+
+### Automated Tests
+- **Schema isolation test** (after Step 5): `docker compose exec backend python manage.py test apps.tenants.tests.test_isolation`
+- **Auth flow test** (after Step 6): `docker compose exec backend python manage.py test apps.accounts`
+- **Property permission test** (after Step 7): `docker compose exec backend python manage.py test apps.properties`
+- **All backend tests**: `docker compose exec backend python manage.py test --parallel`
+
+### Manual Verification
+- After Step 3: `docker compose ps` shows all services healthy
+- After Step 4: `docker compose exec db psql -U vasati vasati -c "SELECT schema_name FROM information_schema.schemata;"` shows `public` schema
+- After Step 5: Same command shows test org schema created
+- After Step 14: Browse to `http://localhost:5173` to verify frontend renders
