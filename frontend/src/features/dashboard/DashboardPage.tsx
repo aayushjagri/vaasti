@@ -1,210 +1,212 @@
-/**
- * Vasati — Dashboard Page
- * Real data from /api/v1/reports/dashboard/
- */
-import { useEffect, useState } from 'react'
-import { api } from '../../api'
-import { formatNPR, formatBSMonth, getCurrentBSMonth } from '../../utils'
-
-interface DashboardData {
-    properties: {
-        total: number; units_total: number; units_occupied: number;
-        units_vacant: number; units_maintenance: number; occupancy_rate: number;
-    }
-    tenants: { active: number }
-    leases: { active: number; expiring_soon: number; expired: number }
-    revenue: {
-        expected_this_month: string; collected_this_month: string;
-        collection_rate: number; overdue_count: number;
-        monthly_trend: { year: number; month: number; total_npr: string }[]
-    }
-    compliance: { pending_registrations: number; expiring_registrations: number }
-    recent_payments: any[]
-}
+import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import {
+  Building2, DoorOpen, Users, FileText,
+  Banknote, ShieldCheck, Bell, TrendingUp,
+  AlertCircle, Clock, CheckCircle2, ArrowRight, Loader2
+} from 'lucide-react'
+import { reportsApi } from '../../api'
+import { formatBSMonth, getCurrentBSMonthStr } from '../../utils/bs-date'
 
 export default function DashboardPage() {
-    const [data, setData] = useState<DashboardData | null>(null)
-    const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: reportsApi.dashboard,
+    refetchInterval: 60_000,
+  })
 
-    useEffect(() => {
-        api.get<DashboardData>('/reports/dashboard/')
-            .then(setData)
-            .catch(console.error)
-            .finally(() => setLoading(false))
-    }, [])
+  const collectionPct = stats
+    ? Math.round((stats.rent_collected_this_month / (stats.rent_expected_this_month || 1)) * 100)
+    : 0
 
-    if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin"></div></div>
-
-    if (!data) return <p className="text-slate-400 text-center py-10">Failed to load dashboard data</p>
-
-    const currentBSMonth = getCurrentBSMonth()
-
+  if (isLoading) {
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                    <h1 className="page-title">Dashboard</h1>
-                    <p className="text-slate-400 text-sm">{formatBSMonth(currentBSMonth)} — Overview</p>
-                </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <div className="stat-card">
-                    <span className="stat-label">Properties</span>
-                    <span className="stat-value">{data.properties.total}</span>
-                    <span className="text-xs text-slate-500">{data.properties.units_total} units total</span>
-                </div>
-                <div className="stat-card">
-                    <span className="stat-label">Occupancy</span>
-                    <span className="stat-value text-status-occupied">{data.properties.occupancy_rate}%</span>
-                    <span className="text-xs text-slate-500">{data.properties.units_occupied} / {data.properties.units_total}</span>
-                </div>
-                <div className="stat-card">
-                    <span className="stat-label">Active Tenants</span>
-                    <span className="stat-value">{data.tenants.active}</span>
-                    <span className="text-xs text-status-expiring">{data.leases.expiring_soon} expiring</span>
-                </div>
-                <div className="stat-card">
-                    <span className="stat-label">Collection Rate</span>
-                    <span className={`stat-value ${data.revenue.collection_rate >= 80 ? 'text-status-paid' : 'text-status-overdue'}`}>
-                        {data.revenue.collection_rate}%
-                    </span>
-                    <span className="text-xs text-slate-500">{data.revenue.overdue_count} overdue</span>
-                </div>
-            </div>
-
-            {/* Revenue Summary */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="card">
-                    <h3 className="section-title">Revenue — {formatBSMonth(currentBSMonth)}</h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-400">Expected</span>
-                            <span className="text-white font-mono">{formatNPR(data.revenue.expected_this_month)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-400">Collected</span>
-                            <span className="text-status-paid font-mono">{formatNPR(data.revenue.collected_this_month)}</span>
-                        </div>
-                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-gold to-status-paid rounded-full transition-all"
-                                style={{ width: `${Math.min(data.revenue.collection_rate, 100)}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="card">
-                    <h3 className="section-title">Monthly Trend</h3>
-                    <div className="flex items-end gap-2 h-32">
-                        {data.revenue.monthly_trend.map((m, i) => {
-                            const max = Math.max(...data.revenue.monthly_trend.map(t => parseFloat(t.total_npr) || 1))
-                            const h = ((parseFloat(m.total_npr) || 0) / max) * 100
-                            return (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                    <div
-                                        className="w-full bg-gold/20 rounded-t-lg hover:bg-gold/30 transition-colors relative group"
-                                        style={{ height: `${Math.max(h, 4)}%` }}
-                                    >
-                                        <div className="absolute -top-6 left-1/2 -translate-x-1/2 hidden group-hover:block text-xs text-gold bg-bg-card px-2 py-1 rounded whitespace-nowrap">
-                                            {formatNPR(m.total_npr)}
-                                        </div>
-                                    </div>
-                                    <span className="text-[10px] text-slate-500">{m.month}</span>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
-
-            {/* Unit Status + Compliance */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="card">
-                    <h3 className="section-title">Unit Status</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-status-occupied/5">
-                            <div className="w-3 h-3 rounded-full bg-status-occupied"></div>
-                            <div>
-                                <span className="text-white font-mono">{data.properties.units_occupied}</span>
-                                <span className="text-slate-400 text-sm ml-2">Occupied</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-status-vacant/5">
-                            <div className="w-3 h-3 rounded-full bg-status-vacant"></div>
-                            <div>
-                                <span className="text-white font-mono">{data.properties.units_vacant}</span>
-                                <span className="text-slate-400 text-sm ml-2">Vacant</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-status-maintenance/5">
-                            <div className="w-3 h-3 rounded-full bg-status-maintenance"></div>
-                            <div>
-                                <span className="text-white font-mono">{data.properties.units_maintenance}</span>
-                                <span className="text-slate-400 text-sm ml-2">Maintenance</span>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-status-overdue/5">
-                            <div className="w-3 h-3 rounded-full bg-status-overdue"></div>
-                            <div>
-                                <span className="text-white font-mono">{data.revenue.overdue_count}</span>
-                                <span className="text-slate-400 text-sm ml-2">Overdue</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="card">
-                    <h3 className="section-title">Compliance</h3>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center p-3 rounded-xl bg-status-pending/5">
-                            <span className="text-slate-400">Pending Registrations</span>
-                            <span className="badge-pending">{data.compliance.pending_registrations}</span>
-                        </div>
-                        <div className="flex justify-between items-center p-3 rounded-xl bg-status-expiring/5">
-                            <span className="text-slate-400">Expiring Soon</span>
-                            <span className="badge-expiring">{data.compliance.expiring_registrations}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Recent Payments */}
-            <div className="card">
-                <h3 className="section-title">Recent Payments</h3>
-                {data.recent_payments.length === 0 ? (
-                    <p className="text-slate-500 text-sm">No payments recorded yet</p>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="text-slate-400 text-left">
-                                    <th className="pb-3">Receipt</th>
-                                    <th className="pb-3">Tenant</th>
-                                    <th className="pb-3">Amount</th>
-                                    <th className="pb-3">Method</th>
-                                    <th className="pb-3">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.recent_payments.map((p: any) => (
-                                    <tr key={p.id} className="table-row">
-                                        <td className="py-3 font-mono text-xs text-gold">{p.receipt_number}</td>
-                                        <td className="py-3">{p.tenant_name}</td>
-                                        <td className="py-3 font-mono">{formatNPR(p.amount_npr)}</td>
-                                        <td className="py-3 capitalize">{p.method_display}</td>
-                                        <td className="py-3">
-                                            <span className={`badge-${p.status}`}>{p.status_display}</span>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-            </div>
-        </div>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 size={32} className="animate-spin text-gold" />
+      </div>
     )
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="page-title">Dashboard</h1>
+        <p className="text-slate-400 text-sm mt-1">{formatBSMonth(getCurrentBSMonthStr())} — Overview</p>
+      </div>
+
+      {/* Primary stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <button onClick={() => navigate('/properties')} className="stat-card text-left hover:border-gold/20 cursor-pointer">
+          <Building2 size={20} className="text-gold mb-2" strokeWidth={1.5} />
+          <div className="stat-value">{stats?.total_properties ?? '—'}</div>
+          <div className="stat-label">Properties</div>
+        </button>
+
+        <button onClick={() => navigate('/properties')} className="stat-card text-left hover:border-gold/20 cursor-pointer">
+          <DoorOpen size={20} className="text-status-occupied mb-2" strokeWidth={1.5} />
+          <div className="stat-value">
+            <span>{stats?.occupied_units ?? '—'}</span>
+            <span className="text-slate-600 text-base font-normal"> / {stats?.total_units ?? '—'}</span>
+          </div>
+          <div className="stat-label">Units Occupied</div>
+        </button>
+
+        <button onClick={() => navigate('/tenants')} className="stat-card text-left hover:border-gold/20 cursor-pointer">
+          <Users size={20} className="text-status-reserved mb-2" strokeWidth={1.5} />
+          <div className="stat-value">{stats?.total_tenants ?? '—'}</div>
+          <div className="stat-label">Active Tenants</div>
+        </button>
+
+        <button
+          onClick={() => navigate('/leases?status=expiring')}
+          className={`stat-card text-left cursor-pointer ${stats?.expiring_leases ? 'border-status-expiring/30 hover:border-status-expiring/60' : 'hover:border-gold/20'}`}
+        >
+          <FileText size={20} className={stats?.expiring_leases ? 'text-status-expiring mb-2' : 'text-slate-500 mb-2'} strokeWidth={1.5} />
+          <div className={`stat-value ${stats?.expiring_leases ? 'text-status-expiring' : ''}`}>{stats?.expiring_leases ?? '—'}</div>
+          <div className="stat-label">Leases Expiring</div>
+        </button>
+      </div>
+
+      {/* Rent collection + overdue row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Rent collection card */}
+        <div className="card lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="section-title mb-0">Rent Collection</h2>
+            <span className="text-xs text-slate-500">{formatBSMonth(getCurrentBSMonthStr())}</span>
+          </div>
+
+          <div className="flex items-end gap-4 mb-4">
+            <div>
+              <div className="text-3xl font-bold text-gold" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                NPR {(stats?.rent_collected_this_month ?? 0).toLocaleString()}
+              </div>
+              <div className="text-sm text-slate-400 mt-0.5">
+                of NPR {(stats?.rent_expected_this_month ?? 0).toLocaleString()} expected
+              </div>
+            </div>
+            <div className="ml-auto text-right">
+              <div className="text-2xl font-bold" style={{ fontFamily: 'JetBrains Mono, monospace', color: collectionPct >= 80 ? '#22c55e' : collectionPct >= 50 ? '#f59e0b' : '#ef4444' }}>
+                {collectionPct}%
+              </div>
+              <div className="text-xs text-slate-500">collected</div>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-3 bg-bg-elevated rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${Math.min(collectionPct, 100)}%`,
+                background: collectionPct >= 80 ? '#22c55e' : collectionPct >= 50 ? '#f59e0b' : '#ef4444',
+              }}
+            />
+          </div>
+
+          <button
+            onClick={() => navigate('/payments')}
+            className="flex items-center gap-1 text-gold text-sm mt-4 hover:underline"
+          >
+            View all payments <ArrowRight size={14} />
+          </button>
+        </div>
+
+        {/* Quick alerts */}
+        <div className="card space-y-3">
+          <h2 className="section-title mb-2">Alerts</h2>
+
+          <button
+            onClick={() => navigate('/payments?status=overdue')}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
+              stats?.overdue_payments
+                ? 'bg-status-overdue/10 border border-status-overdue/20 hover:bg-status-overdue/15'
+                : 'bg-bg-elevated'
+            }`}
+          >
+            <AlertCircle size={18} className={stats?.overdue_payments ? 'text-status-overdue' : 'text-slate-600'} />
+            <div className="text-left">
+              <div className="text-sm font-medium text-white">{stats?.overdue_payments ?? 0} Overdue</div>
+              <div className="text-xs text-slate-500">Rent payments</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/compliance?status=not_started')}
+            className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
+              stats?.pending_police_reg
+                ? 'bg-status-pending/10 border border-status-pending/20 hover:bg-status-pending/15'
+                : 'bg-bg-elevated'
+            }`}
+          >
+            <ShieldCheck size={18} className={stats?.pending_police_reg ? 'text-status-pending' : 'text-slate-600'} />
+            <div className="text-left">
+              <div className="text-sm font-medium text-white">{stats?.pending_police_reg ?? 0} Pending</div>
+              <div className="text-xs text-slate-500">Police registration</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => navigate('/leases?status=expiring')}
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-bg-elevated hover:bg-bg-hover transition-colors"
+          >
+            <Clock size={18} className="text-status-expiring" />
+            <div className="text-left">
+              <div className="text-sm font-medium text-white">{stats?.expiring_leases ?? 0} Expiring</div>
+              <div className="text-xs text-slate-500">Leases soon</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Recent activity */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="section-title mb-0">Recent Activity</h2>
+          <TrendingUp size={16} className="text-slate-600" />
+        </div>
+
+        {!stats?.recent_activities?.length ? (
+          <div className="text-center py-8 text-slate-500">
+            <Bell size={32} className="mx-auto mb-2 opacity-30" strokeWidth={1} />
+            <p className="text-sm">No recent activity</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {stats.recent_activities.slice(0, 8).map(item => {
+              const Icon = item.type === 'payment'
+                ? CheckCircle2
+                : item.type === 'tenant'
+                ? Users
+                : item.type === 'lease'
+                ? FileText
+                : item.type === 'compliance'
+                ? ShieldCheck
+                : Bell
+              const color = item.type === 'payment' ? 'text-status-paid' :
+                item.type === 'tenant' ? 'text-status-reserved' :
+                item.type === 'lease' ? 'text-gold' :
+                item.type === 'compliance' ? 'text-status-active' : 'text-status-pending'
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start gap-3 py-2 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-bg-hover rounded-lg px-2 -mx-2 transition-colors"
+                  onClick={() => item.link && navigate(item.link)}
+                >
+                  <Icon size={16} className={`${color} mt-0.5 flex-shrink-0`} />
+                  <p className="text-sm text-slate-300 flex-1">{item.description}</p>
+                  <span className="text-xs text-slate-600 flex-shrink-0" style={{ fontFamily: 'JetBrains Mono, monospace' }}>
+                    {new Date(item.timestamp).toLocaleDateString()}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }

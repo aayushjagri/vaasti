@@ -13,6 +13,7 @@
   select,
   textarea {
     @apply bg-bg-elevated border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 outline-none focus:border-gold focus:ring-1 focus:ring-gold/30 transition-all duration-200;
+    font-family: 'Syne', system-ui, sans-serif;
   }
 
   label {
@@ -41,6 +42,7 @@
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+    font-family: 'Syne', sans-serif;
   }
 
   .btn-primary {
@@ -72,11 +74,13 @@
   }
 
   .stat-value {
-    @apply text-2xl font-bold text-white font-mono;
+    @apply text-2xl font-bold text-white;
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .stat-label {
     @apply text-sm text-slate-400;
+    font-family: 'Syne', sans-serif;
   }
 
   .badge {
@@ -139,12 +143,23 @@
     @apply sidebar-link text-gold bg-gold/10 border-l-2 border-gold;
   }
 
+  /* Page/section titles use Cormorant Garamond serif */
   .page-title {
     @apply text-2xl md:text-3xl font-bold text-white;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 
   .section-title {
     @apply text-lg font-semibold text-white mb-4;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-weight: 600;
+  }
+
+  /* Mono amounts */
+  .amount {
+    font-family: 'JetBrains Mono', monospace;
   }
 
   .modal-overlay {

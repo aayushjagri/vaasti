@@ -1,100 +1,71 @@
-/**
- * Vasati — Auth Store (Zustand)
- * Manages JWT tokens, user state, and login/logout.
- * Supports dual-channel OTP: phone (SMS) or email.
- */
 import { create } from 'zustand'
-import { api } from '../api'
-
-interface User {
-    id: number
-    phone: string
-    email: string | null
-    full_name: string
-    full_name_nepali: string
-    memberships: { role: string; invited_at: string; accepted_at: string | null }[]
-}
+import { authApi } from '../api'
+import type { User } from '../types'
 
 interface AuthState {
-    user: User | null
-    isAuthenticated: boolean
-    isLoading: boolean
-    error: string | null
-
-    requestOTP: (identifier: string, purpose?: string, channel?: 'phone' | 'email') => Promise<void>
-    verifyOTP: (identifier: string, code: string, purpose?: string, channel?: 'phone' | 'email') => Promise<{ created: boolean }>
-    loadUser: () => Promise<void>
-    logout: () => void
-    setError: (e: string | null) => void
+  user: User | null
+  isAuthenticated: boolean
+  isLoading: boolean
+  error: string | null
+  requestOTP: (identifier: string, purpose: string, channel: string) => Promise<void>
+  verifyOTP: (identifier: string, otp: string, purpose: string, channel: string) => Promise<void>
+  loadUser: () => Promise<void>
+  logout: () => void
+  setError: (error: string | null) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-    user: null,
-    isAuthenticated: !!localStorage.getItem('access_token'),
-    isLoading: false,
-    error: null,
+  user: null,
+  isAuthenticated: !!localStorage.getItem('vasati_token'),
+  isLoading: false,
+  error: null,
 
-    requestOTP: async (identifier, purpose = 'login', channel = 'phone') => {
-        set({ isLoading: true, error: null })
-        try {
-            const body: Record<string, string> = { purpose }
-            if (channel === 'email') {
-                body.email = identifier
-            } else {
-                body.phone = identifier
-            }
-            await api.post('/auth/request-otp/', body)
-            set({ isLoading: false })
-        } catch (err: any) {
-            set({ isLoading: false, error: 'Failed to send OTP. Try again.' })
-            throw err
-        }
-    },
+  setError: (error) => set({ error }),
 
-    verifyOTP: async (identifier, code, purpose = 'login', channel = 'phone') => {
-        set({ isLoading: true, error: null })
-        try {
-            const body: Record<string, string> = { code, purpose }
-            if (channel === 'email') {
-                body.email = identifier
-            } else {
-                body.phone = identifier
-            }
-            const data = await api.post<{
-                access: string; refresh: string; user: User; created: boolean
-            }>('/auth/verify-otp/', body)
+  requestOTP: async (identifier, purpose, channel) => {
+    set({ isLoading: true, error: null })
+    try {
+      await authApi.requestOTP(identifier, purpose, channel)
+    } catch (e: any) {
+      set({ error: e.message || 'Failed to send OTP' })
+      throw e
+    } finally {
+      set({ isLoading: false })
+    }
+  },
 
-            api.setToken(data.access)
-            localStorage.setItem('access_token', data.access)
-            localStorage.setItem('refresh_token', data.refresh)
-            set({ user: data.user, isAuthenticated: true, isLoading: false })
-            return { created: data.created }
-        } catch (err: any) {
-            set({ isLoading: false, error: 'Invalid or expired OTP' })
-            throw err
-        }
-    },
+  verifyOTP: async (identifier, otp, purpose, channel) => {
+    set({ isLoading: true, error: null })
+    try {
+      const data = await authApi.verifyOTP(identifier, otp, purpose, channel)
+      localStorage.setItem('vasati_token', data.access)
+      set({
+        user: { ...data.user, role: data.user.role as User['role'] },
+        isAuthenticated: true,
+      })
+    } catch (e: any) {
+      set({ error: e.message || 'Invalid OTP' })
+      throw e
+    } finally {
+      set({ isLoading: false })
+    }
+  },
 
-    loadUser: async () => {
-        const token = localStorage.getItem('access_token')
-        if (!token) return
-        api.setToken(token)
-        try {
-            const user = await api.get<User>('/auth/me/')
-            set({ user, isAuthenticated: true })
-        } catch {
-            set({ isAuthenticated: false, user: null })
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('refresh_token')
-        }
-    },
+  loadUser: async () => {
+    const token = localStorage.getItem('vasati_token')
+    if (!token) return
+    try {
+      const user = await authApi.me()
+      set({ user: user as User, isAuthenticated: true })
+    } catch {
+      localStorage.removeItem('vasati_token')
+      set({ user: null, isAuthenticated: false })
+    }
+  },
 
-    logout: () => {
-        api.setToken(null)
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        set({ user: null, isAuthenticated: false })
-    },
-
-    setError: (e) => set({ error: e }),
+  logout: () => {
+    localStorage.removeItem('vasati_token')
+    set({ user: null, isAuthenticated: false })
+    window.location.href = '/login'
+  },
 }))

@@ -1,120 +1,194 @@
 /**
- * Vasati — API Client
- * Wraps fetch() with JWT auth, tenant header, and error handling.
+ * Vasati API Client
+ * All calls to /api/v1/* with JWT Bearer auth.
  */
+import type {
+  Property, PropertyCreate, Unit, UnitCreate,
+  Tenant, TenantCreate, Lease, LeaseCreate,
+  Payment, LogCashPayment, Compliance, Notice, NoticeCreate,
+  DashboardStats, PaginatedResponse
+} from '../types'
 
-const API_BASE = '/api/v1'
+const BASE = '/api/v1'
 
-interface ApiOptions extends RequestInit {
-    json?: unknown
+function getToken(): string | null {
+  return localStorage.getItem('vasati_token')
 }
 
-class ApiClient {
-    private accessToken: string | null = null
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
+  }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
+  }
 
-    setToken(token: string | null) {
-        this.accessToken = token
-    }
+  const res = await fetch(`${BASE}${path}`, { ...options, headers })
 
-    getToken() {
-        return this.accessToken
-    }
+  if (res.status === 401) {
+    localStorage.removeItem('vasati_token')
+    window.location.href = '/login'
+    throw new Error('Unauthorized')
+  }
 
-    async request<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-            ...(opts.headers as Record<string, string> || {}),
-        }
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      msg = body.detail || body.message || JSON.stringify(body)
+    } catch { }
+    throw new Error(msg)
+  }
 
-        if (this.accessToken) {
-            headers['Authorization'] = `Bearer ${this.accessToken}`
-        }
-
-        const config: RequestInit = {
-            ...opts,
-            headers,
-        }
-
-        if (opts.json) {
-            config.body = JSON.stringify(opts.json)
-        }
-
-        const response = await fetch(`${API_BASE}${path}`, config)
-
-        if (response.status === 401) {
-            // Try refresh
-            const refreshed = await this.tryRefresh()
-            if (refreshed) {
-                headers['Authorization'] = `Bearer ${this.accessToken}`
-                const retryResponse = await fetch(`${API_BASE}${path}`, { ...config, headers })
-                if (!retryResponse.ok) throw new ApiError(retryResponse)
-                return retryResponse.json()
-            }
-            // Refresh failed — clear auth
-            this.accessToken = null
-            localStorage.removeItem('access_token')
-            localStorage.removeItem('refresh_token')
-            window.location.href = '/login'
-            throw new ApiError(response)
-        }
-
-        if (!response.ok) throw new ApiError(response)
-
-        if (response.status === 204) return {} as T
-
-        return response.json()
-    }
-
-    private async tryRefresh(): Promise<boolean> {
-        const refreshToken = localStorage.getItem('refresh_token')
-        if (!refreshToken) return false
-
-        try {
-            const res = await fetch(`${API_BASE}/auth/refresh/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ refresh: refreshToken }),
-            })
-            if (!res.ok) return false
-            const data = await res.json()
-            this.accessToken = data.access
-            localStorage.setItem('access_token', data.access)
-            localStorage.setItem('refresh_token', data.refresh)
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    // Convenience methods
-    get<T = unknown>(path: string) { return this.request<T>(path) }
-    post<T = unknown>(path: string, json?: unknown) { return this.request<T>(path, { method: 'POST', json }) }
-    patch<T = unknown>(path: string, json?: unknown) { return this.request<T>(path, { method: 'PATCH', json }) }
-    delete<T = unknown>(path: string) { return this.request<T>(path, { method: 'DELETE' }) }
-
-    // Upload with FormData (no JSON Content-Type)
-    async upload<T = unknown>(path: string, formData: FormData): Promise<T> {
-        const headers: Record<string, string> = {}
-        if (this.accessToken) {
-            headers['Authorization'] = `Bearer ${this.accessToken}`
-        }
-        const res = await fetch(`${API_BASE}${path}`, {
-            method: 'POST',
-            headers,
-            body: formData,
-        })
-        if (!res.ok) throw new ApiError(res)
-        return res.json()
-    }
+  if (res.status === 204) return undefined as T
+  return res.json()
 }
 
-class ApiError extends Error {
-    status: number
-    constructor(response: Response) {
-        super(`API Error: ${response.status} ${response.statusText}`)
-        this.status = response.status
-    }
+// ── Auth ─────────────────────────────────────────────────────────────────────
+export const authApi = {
+  requestOTP: (identifier: string, purpose: string, channel: string) =>
+    request<{ message: string }>('/auth/otp/request/', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, purpose, channel }),
+    }),
+  verifyOTP: (identifier: string, otp: string, purpose: string, channel: string) =>
+    request<{ access: string; refresh: string; user: { id: string; full_name: string; phone?: string; email?: string; role: string } }>(
+      '/auth/otp/verify/', {
+        method: 'POST',
+        body: JSON.stringify({ identifier, otp, purpose, channel }),
+      }
+    ),
+  me: () => request<{ id: string; full_name: string; phone?: string; email?: string; role: string }>('/auth/me/'),
 }
 
-export const api = new ApiClient()
-export { ApiError }
+// ── Properties ────────────────────────────────────────────────────────────────
+export const propertiesApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Property>>(`/properties/${qs}`)
+  },
+  get: (id: string) => request<Property>(`/properties/${id}/`),
+  create: (data: PropertyCreate) =>
+    request<Property>('/properties/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<PropertyCreate>) =>
+    request<Property>(`/properties/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/properties/${id}/`, { method: 'DELETE' }),
+  units: (id: string) => request<PaginatedResponse<Unit>>(`/properties/${id}/units/`),
+}
+
+// ── Units ─────────────────────────────────────────────────────────────────────
+export const unitsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Unit>>(`/units/${qs}`)
+  },
+  get: (id: string) => request<Unit>(`/units/${id}/`),
+  create: (data: UnitCreate) =>
+    request<Unit>('/units/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<UnitCreate & { status: string }>) =>
+    request<Unit>(`/units/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/units/${id}/`, { method: 'DELETE' }),
+}
+
+// ── Tenants ───────────────────────────────────────────────────────────────────
+export const tenantsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Tenant>>(`/tenants/${qs}`)
+  },
+  get: (id: string) => request<Tenant>(`/tenants/${id}/`),
+  create: (formData: FormData) =>
+    request<Tenant>('/tenants/', { method: 'POST', body: formData }),
+  update: (id: string, data: Partial<Tenant>) =>
+    request<Tenant>(`/tenants/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  delete: (id: string) => request<void>(`/tenants/${id}/`, { method: 'DELETE' }),
+  payments: (id: string) => request<PaginatedResponse<Payment>>(`/tenants/${id}/payments/`),
+  leases: (id: string) => request<PaginatedResponse<Lease>>(`/tenants/${id}/leases/`),
+}
+
+// ── Leases ────────────────────────────────────────────────────────────────────
+export const leasesApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Lease>>(`/leases/${qs}`)
+  },
+  get: (id: string) => request<Lease>(`/leases/${id}/`),
+  create: (data: LeaseCreate) =>
+    request<Lease>('/leases/', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<LeaseCreate>) =>
+    request<Lease>(`/leases/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  terminate: (id: string, reason: string) =>
+    request<Lease>(`/leases/${id}/terminate/`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  requestAck: (id: string) =>
+    request<{ message: string }>(`/leases/${id}/request-acknowledgement/`, { method: 'POST' }),
+  verifyAck: (id: string, otp: string) =>
+    request<Lease>(`/leases/${id}/verify-acknowledgement/`, { method: 'POST', body: JSON.stringify({ otp }) }),
+  downloadPdf: (id: string) =>
+    fetch(`${BASE}/leases/${id}/pdf/`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    }),
+}
+
+// ── Payments ──────────────────────────────────────────────────────────────────
+export const paymentsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Payment>>(`/payments/${qs}`)
+  },
+  get: (id: string) => request<Payment>(`/payments/${id}/`),
+  logCash: (data: LogCashPayment) =>
+    request<Payment>('/payments/log-cash/', { method: 'POST', body: JSON.stringify(data) }),
+  downloadReceipt: (id: string) =>
+    fetch(`${BASE}/payments/${id}/receipt/`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    }),
+  summary: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<{ total_collected: number; total_expected: number; overdue_count: number }>(`/payments/summary/${qs}`)
+  },
+}
+
+// ── Compliance ────────────────────────────────────────────────────────────────
+export const complianceApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Compliance>>(`/compliance/${qs}`)
+  },
+  get: (id: string) => request<Compliance>(`/compliance/${id}/`),
+  submit: (tenantId: string, formData: Record<string, string>) =>
+    request<Compliance>(`/compliance/`, {
+      method: 'POST',
+      body: JSON.stringify({ tenant: tenantId, form_data: formData }),
+    }),
+  updateStatus: (id: string, status: string, notes?: string) =>
+    request<Compliance>(`/compliance/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    }),
+  downloadForm: (id: string) =>
+    fetch(`${BASE}/compliance/${id}/pdf/`, {
+      headers: { Authorization: `Bearer ${getToken()}` }
+    }),
+}
+
+// ── Notices ───────────────────────────────────────────────────────────────────
+export const noticesApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request<PaginatedResponse<Notice>>(`/notices/${qs}`)
+  },
+  get: (id: string) => request<Notice>(`/notices/${id}/`),
+  create: (data: NoticeCreate) =>
+    request<Notice>('/notices/', { method: 'POST', body: JSON.stringify(data) }),
+  recipients: (id: string) => request<{ name: string; phone?: string; email?: string; delivered: boolean }[]>(`/notices/${id}/recipients/`),
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+export const reportsApi = {
+  dashboard: () => request<DashboardStats>('/reports/dashboard/'),
+}

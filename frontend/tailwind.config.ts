@@ -8,21 +8,16 @@ export default {
     theme: {
         extend: {
             colors: {
-                // Core palette — dark luxury theme
                 bg: '#0b1220',
                 'bg-card': '#111827',
                 'bg-elevated': '#1a2332',
                 'bg-hover': '#1f2937',
-
-                // Gold accent system
                 gold: {
                     DEFAULT: '#c9a84c',
                     light: '#e8d48b',
                     dark: '#9a7b2c',
                     muted: 'rgba(201, 168, 76, 0.15)',
                 },
-
-                // Status colors
                 status: {
                     occupied: '#22c55e',
                     vacant: '#3b82f6',
@@ -36,8 +31,6 @@ export default {
                     draft: '#6b7280',
                     expiring: '#f97316',
                 },
-
-                // Neutral grays
                 slate: {
                     50: '#f8fafc',
                     100: '#f1f5f9',
@@ -52,8 +45,8 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Syne', 'system-ui', 'sans-serif'],
                 serif: ['Cormorant Garamond', 'Georgia', 'serif'],
+                sans: ['Syne', 'system-ui', 'sans-serif'],
                 mono: ['JetBrains Mono', 'monospace'],
             },
             borderRadius: {

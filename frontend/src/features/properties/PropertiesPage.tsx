@@ -1,238 +1,248 @@
-/**
- * Vasati — Properties Page
- * List + create properties. Unit grid with color-coded status.
- */
-import { useEffect, useState } from 'react'
-import { api } from '../../api'
-import { formatNPR } from '../../utils'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import {
+  Building2, Plus, Search, DoorOpen,
+  CheckCircle2, Circle, Loader2, X
+} from 'lucide-react'
+import { propertiesApi } from '../../api'
+import { toast } from '../../components/ui/Toast'
+import type { PropertyCreate, PropertyType } from '../../types'
 
-interface Property {
-    id: number; name: string; name_nepali: string; property_type: string;
-    type_display: string; ward_no: string; municipality: string; district: string;
-    province: string; total_units: number; is_active: boolean; units?: Unit[]
-}
+const PROPERTY_TYPES: { value: PropertyType; label: string }[] = [
+  { value: 'residential', label: 'Residential' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'mixed', label: 'Mixed Use' },
+]
 
-interface Unit {
-    id: number; unit_number: string; floor: number; unit_type: string;
-    type_display: string; base_rent_npr: string; status: string;
-    status_display: string; amenities: string[]
+const NEPAL_DISTRICTS = [
+  'Kathmandu', 'Lalitpur', 'Bhaktapur', 'Kavre', 'Sindhupalchok',
+  'Nuwakot', 'Makwanpur', 'Chitwan', 'Pokhara', 'Kaski',
+  'Butwal', 'Rupandehi', 'Palpa', 'Biratnagar', 'Morang',
+  'Sunsari', 'Jhapa', 'Dharan', 'Birgunj', 'Parsa',
+  'Hetauda', 'Nawalpur', 'Other',
+]
+
+function CreatePropertyModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
+  const [form, setForm] = useState<PropertyCreate>({
+    name: '', address: '', district: 'Kathmandu', ward_no: '',
+    property_type: 'residential', notes: '',
+  })
+  const [errors, setErrors] = useState<Partial<PropertyCreate>>({})
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: propertiesApi.create,
+    onSuccess: (prop) => {
+      qc.invalidateQueries({ queryKey: ['properties'] })
+      toast(`Property "${prop.name}" created`)
+      navigate(`/properties/${prop.id}`)
+    },
+    onError: (e: Error) => toast(e.message, 'error'),
+  })
+
+  function validate() {
+    const e: Partial<PropertyCreate> = {}
+    if (!form.name.trim()) e.name = 'Name is required'
+    if (!form.address.trim()) e.address = 'Address is required'
+    if (!form.ward_no.trim()) e.ward_no = 'Ward no. is required'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault()
+    if (validate()) mutate(form)
+  }
+
+  const f = (k: keyof PropertyCreate) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setForm(prev => ({ ...prev, [k]: e.target.value }))
+    setErrors(prev => ({ ...prev, [k]: undefined }))
+  }
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <div className="flex items-center justify-between p-6 border-b border-slate-800">
+          <h2 className="text-xl font-bold text-white" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+            Add Property
+          </h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label>Property Name <span className="text-status-overdue">*</span></label>
+            <input value={form.name} onChange={f('name')} placeholder="e.g. Thapathali Apartment" className={`w-full ${errors.name ? 'border-status-overdue' : ''}`} autoFocus />
+            {errors.name && <p className="text-status-overdue text-xs mt-1">{errors.name}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label>Type <span className="text-status-overdue">*</span></label>
+              <select value={form.property_type} onChange={f('property_type')} className="w-full">
+                {PROPERTY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label>District <span className="text-status-overdue">*</span></label>
+              <select value={form.district} onChange={f('district')} className="w-full">
+                {NEPAL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label>Address <span className="text-status-overdue">*</span></label>
+              <input value={form.address} onChange={f('address')} placeholder="Street / Tole" className={`w-full ${errors.address ? 'border-status-overdue' : ''}`} />
+              {errors.address && <p className="text-status-overdue text-xs mt-1">{errors.address}</p>}
+            </div>
+            <div>
+              <label>Ward No. <span className="text-status-overdue">*</span></label>
+              <input value={form.ward_no} onChange={f('ward_no')} placeholder="e.g. 10" className={`w-full ${errors.ward_no ? 'border-status-overdue' : ''}`} />
+              {errors.ward_no && <p className="text-status-overdue text-xs mt-1">{errors.ward_no}</p>}
+            </div>
+          </div>
+
+          <div>
+            <label>Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={f('notes')}
+              placeholder="Optional notes about this property…"
+              className="w-full resize-none"
+              rows={2}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="btn-ghost flex-1">Cancel</button>
+            <button type="submit" disabled={isPending} className="btn-primary flex-1">
+              {isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              Create Property
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
 }
 
 export default function PropertiesPage() {
-    const [properties, setProperties] = useState<Property[]>([])
-    const [selected, setSelected] = useState<Property | null>(null)
-    const [units, setUnits] = useState<Unit[]>([])
-    const [showCreate, setShowCreate] = useState(false)
-    const [showUnitForm, setShowUnitForm] = useState(false)
-    const [loading, setLoading] = useState(true)
+  const navigate = useNavigate()
+  const [search, setSearch] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
 
-    useEffect(() => { loadProperties() }, [])
+  const { data, isLoading } = useQuery({
+    queryKey: ['properties'],
+    queryFn: () => propertiesApi.list(),
+  })
 
-    async function loadProperties() {
-        setLoading(true)
-        try {
-            const data = await api.get<{ results: Property[] }>('/properties/')
-            setProperties(data.results || [])
-        } catch { setProperties([]) }
-        setLoading(false)
-    }
+  const properties = data?.results ?? []
+  const filtered = properties.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.district.toLowerCase().includes(search.toLowerCase())
+  )
 
-    async function selectProperty(p: Property) {
-        setSelected(p)
-        try {
-            const unitData = await api.get<Unit[]>(`/properties/${p.id}/units/`)
-            setUnits(unitData)
-        } catch { setUnits([]) }
-    }
-
-    async function createProperty(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        const fd = new FormData(e.currentTarget)
-        const body = Object.fromEntries(fd)
-        await api.post('/properties/', body)
-        setShowCreate(false)
-        loadProperties()
-    }
-
-    async function createUnit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault()
-        const fd = new FormData(e.currentTarget)
-        const body: any = Object.fromEntries(fd)
-        body.property = selected!.id
-        body.amenities = body.amenities ? body.amenities.split(',').map((s: string) => s.trim()) : []
-        await api.post('/units/', body)
-        setShowUnitForm(false)
-        selectProperty(selected!)
-    }
-
-    const statusColor: Record<string, string> = {
-        occupied: 'bg-status-occupied',
-        vacant: 'bg-status-vacant',
-        maintenance: 'bg-status-maintenance',
-        reserved: 'bg-status-reserved',
-    }
-
-    if (loading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-2 border-gold/30 border-t-gold rounded-full animate-spin"></div></div>
-
-    return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <h1 className="page-title">Properties</h1>
-                <button onClick={() => setShowCreate(true)} className="btn-primary">+ Add Property</button>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Property List */}
-                <div className="space-y-3 lg:col-span-1">
-                    {properties.length === 0 ? (
-                        <div className="card text-center py-10">
-                            <p className="text-slate-400">No properties yet.</p>
-                            <button onClick={() => setShowCreate(true)} className="btn-secondary mt-3 text-sm">Create your first property</button>
-                        </div>
-                    ) : properties.map(p => (
-                        <div
-                            key={p.id}
-                            onClick={() => selectProperty(p)}
-                            className={`card-hover cursor-pointer ${selected?.id === p.id ? 'border-gold/40 shadow-gold' : ''}`}
-                        >
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h3 className="font-semibold text-white">{p.name}</h3>
-                                    {p.name_nepali && <p className="text-xs text-slate-500">{p.name_nepali}</p>}
-                                    <p className="text-sm text-slate-400 mt-1">{p.municipality}, {p.district}</p>
-                                </div>
-                                <span className="badge bg-gold/10 text-gold">{p.type_display}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mt-3 text-xs text-slate-500">
-                                <span>Ward {p.ward_no}</span>
-                                <span>•</span>
-                                <span>{p.total_units} units</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Unit Grid */}
-                <div className="lg:col-span-2">
-                    {selected ? (
-                        <div className="card">
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <h2 className="text-xl font-bold text-white">{selected.name}</h2>
-                                    <p className="text-sm text-slate-400">{selected.municipality}, Ward {selected.ward_no}</p>
-                                </div>
-                                <button onClick={() => setShowUnitForm(true)} className="btn-secondary text-sm">+ Add Unit</button>
-                            </div>
-
-                            {/* Status legend */}
-                            <div className="flex flex-wrap gap-4 mb-4 text-xs">
-                                {Object.entries(statusColor).map(([s, c]) => (
-                                    <div key={s} className="flex items-center gap-1.5">
-                                        <div className={`w-3 h-3 rounded ${c}`}></div>
-                                        <span className="text-slate-400 capitalize">{s}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Grid */}
-                            {units.length === 0 ? (
-                                <p className="text-slate-500 text-sm py-6 text-center">No units added yet</p>
-                            ) : (
-                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-                                    {units.map(u => (
-                                        <div
-                                            key={u.id}
-                                            className={`relative rounded-xl p-3 text-center cursor-pointer
-                        border border-slate-800 hover:border-gold/30 transition-all
-                        ${statusColor[u.status]}/10`}
-                                        >
-                                            <div className={`absolute top-1 right-1 w-2 h-2 rounded-full ${statusColor[u.status]}`}></div>
-                                            <p className="font-mono text-sm font-bold text-white">{u.unit_number}</p>
-                                            <p className="text-[10px] text-slate-500 mt-0.5">F{u.floor}</p>
-                                            <p className="text-xs text-gold mt-1">{formatNPR(u.base_rent_npr)}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="card flex items-center justify-center py-20 text-slate-500">
-                            ← Select a property to view units
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Create Property Modal */}
-            {showCreate && (
-                <div className="modal-overlay" onClick={() => setShowCreate(false)}>
-                    <div className="modal-content p-6" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-xl font-bold text-white mb-4">New Property</h2>
-                        <form onSubmit={createProperty} className="space-y-3">
-                            <div><label>Name *</label><input name="name" required className="w-full" /></div>
-                            <div><label>Name (Nepali)</label><input name="name_nepali" className="w-full" /></div>
-                            <div>
-                                <label>Type *</label>
-                                <select name="property_type" required className="w-full">
-                                    <option value="residential">Residential</option>
-                                    <option value="commercial">Commercial</option>
-                                    <option value="mixed">Mixed Use</option>
-                                    <option value="hostel">Hostel/PG</option>
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label>Ward No *</label><input name="ward_no" required className="w-full" /></div>
-                                <div><label>Municipality *</label><input name="municipality" required className="w-full" /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label>District *</label><input name="district" required className="w-full" /></div>
-                                <div><label>Province *</label><input name="province" required className="w-full" /></div>
-                            </div>
-                            <div className="flex justify-end gap-3 pt-2">
-                                <button type="button" onClick={() => setShowCreate(false)} className="btn-ghost">Cancel</button>
-                                <button type="submit" className="btn-primary">Create Property</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Create Unit Modal */}
-            {showUnitForm && selected && (
-                <div className="modal-overlay" onClick={() => setShowUnitForm(false)}>
-                    <div className="modal-content p-6" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-xl font-bold text-white mb-4">Add Unit — {selected.name}</h2>
-                        <form onSubmit={createUnit} className="space-y-3">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label>Unit Number *</label><input name="unit_number" required placeholder="e.g. 3B, 101" className="w-full" /></div>
-                                <div><label>Floor *</label><input name="floor" type="number" defaultValue="0" required className="w-full" /></div>
-                            </div>
-                            <div>
-                                <label>Type *</label>
-                                <select name="unit_type" required className="w-full">
-                                    <option value="flat">Flat/Apartment</option>
-                                    <option value="room_single">Single Room</option>
-                                    <option value="room_double">Double Room</option>
-                                    <option value="commercial_stall">Commercial Stall</option>
-                                    <option value="shop">Shop</option>
-                                    <option value="hostel_bed">Hostel Bed</option>
-                                    <option value="floor">Entire Floor</option>
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label>Base Rent (NPR) *</label><input name="base_rent_npr" type="number" step="0.01" required className="w-full" /></div>
-                                <div><label>Deposit (NPR)</label><input name="deposit_npr" type="number" step="0.01" defaultValue="0" className="w-full" /></div>
-                            </div>
-                            <div><label>Area (sq.ft)</label><input name="area_sqft" type="number" step="0.01" className="w-full" /></div>
-                            <div><label>Amenities (comma separated)</label><input name="amenities" placeholder="wifi, parking, attached_bathroom" className="w-full" /></div>
-                            <div className="flex justify-end gap-3 pt-2">
-                                <button type="button" onClick={() => setShowUnitForm(false)} className="btn-ghost">Cancel</button>
-                                <button type="submit" className="btn-primary">Add Unit</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-title">Properties</h1>
+          <p className="text-slate-400 text-sm mt-0.5">{data?.count ?? 0} properties</p>
         </div>
-    )
+        <button onClick={() => setShowCreate(true)} className="btn-primary">
+          <Plus size={16} /> Add Property
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search properties…"
+          className="w-full pl-11"
+        />
+      </div>
+
+      {/* Grid */}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-40">
+          <Loader2 size={24} className="animate-spin text-gold" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card text-center py-16">
+          <Building2 size={48} className="mx-auto text-slate-700 mb-3" strokeWidth={1} />
+          <p className="text-slate-400 font-medium">No properties yet</p>
+          <p className="text-slate-600 text-sm mb-5">Add your first property to get started</p>
+          <button onClick={() => setShowCreate(true)} className="btn-primary mx-auto">
+            <Plus size={15} /> Add Property
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filtered.map(p => {
+            const occupancyPct = p.total_units > 0
+              ? Math.round((p.occupied_units / p.total_units) * 100)
+              : 0
+            return (
+              <button
+                key={p.id}
+                onClick={() => navigate(`/properties/${p.id}`)}
+                className="card-hover text-left group"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-gold/10 flex items-center justify-center flex-shrink-0">
+                    <Building2 size={20} className="text-gold" strokeWidth={1.5} />
+                  </div>
+                  <span className="text-xs text-slate-500 capitalize">{p.property_type}</span>
+                </div>
+
+                <h3 className="font-semibold text-white mb-0.5" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '1.1rem' }}>
+                  {p.name}
+                </h3>
+                <p className="text-slate-400 text-sm mb-4">{p.district} · Ward {p.ward_no}</p>
+
+                {/* Occupancy bar */}
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+                    <span>{p.occupied_units} occupied</span>
+                    <span>{occupancyPct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-bg-elevated rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-status-occupied rounded-full"
+                      style={{ width: `${occupancyPct}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <DoorOpen size={14} />
+                    {p.total_units} units
+                  </span>
+                  <span className="flex items-center gap-1.5 text-status-occupied">
+                    <CheckCircle2 size={12} />
+                    {p.occupied_units} occupied
+                  </span>
+                  {p.vacant_units > 0 && (
+                    <span className="flex items-center gap-1.5 text-status-vacant">
+                      <Circle size={12} />
+                      {p.vacant_units} vacant
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {showCreate && <CreatePropertyModal onClose={() => setShowCreate(false)} />}
+    </div>
+  )
 }
